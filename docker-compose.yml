@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pgo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pgo
+      POSTGRES_PASSWORD: pgo
+      POSTGRES_DB: pgo
+    ports:
+      # Port exposé sur la machine hôte. 5433 est utilisé car 5432 est déjà
+      # occupé par un autre projet PostgreSQL sur cette machine.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Crée la base de test pgo_test au premier démarrage du volume.
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgo -d pgo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: pgo-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGO_HTTP_ADDR: ":8080"
+      PGO_DATABASE_URL: "postgres://pgo:pgo@postgres:5432/pgo?sslmode=disable"
+      PGO_ENV: "docker"
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
